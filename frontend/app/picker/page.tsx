@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api, Order, OrderDetail } from "@/lib/api";
 import RiskBadge from "@/components/RiskBadge";
 import { LoadingState, ErrorState, EmptyState } from "@/components/States";
@@ -118,48 +119,73 @@ export default function PickerPage() {
             )}
 
             <div className="space-y-3">
-              {order.items.map((item) => {
-                const specialHandling = item.product.fragility_score >= 65 || item.product.temperature_sensitive;
-                return (
-                  <div key={item.id} className="border border-[#232b40] rounded-lg p-4">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div>
-                        <div className="font-medium">
-                          {item.product.emoji} {item.product.name} <span className="text-[#8b93ab] text-sm">× {item.quantity}</span>
-                        </div>
-                        <div className="text-xs mt-1">
-                          {item.product.fragility_score >= 65 && (
-                            <span className="text-red-400 font-semibold">FRAGILE — HANDLE SEPARATELY</span>
+              {order.items
+                .filter((item) => !item.replaced)
+                .map((item) => {
+                  const specialHandling = item.product.fragility_score >= 65 || item.product.temperature_sensitive;
+                  return (
+                    <div key={item.id} className="border border-[#232b40] rounded-lg p-4">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <div className="font-medium">
+                            {item.product.emoji} {item.product.name} <span className="text-[#8b93ab] text-sm">× {item.quantity}</span>
+                          </div>
+                          <div className="text-xs mt-1">
+                            {item.product.fragility_score >= 65 && (
+                              <span className="text-red-400 font-semibold">FRAGILE — HANDLE SEPARATELY</span>
+                            )}
+                            {item.product.temperature_sensitive && (
+                              <span className="text-blue-400 font-semibold ml-2">TEMPERATURE-SENSITIVE</span>
+                            )}
+                            {!specialHandling && item.requires_inspection === "none" && (
+                              <span className="text-[#8b93ab]">Normal handling</span>
+                            )}
+                          </div>
+                          {item.quality_check_status && (
+                            <div className="text-xs mt-1">
+                              {item.quality_check_status === "PASSED" && (
+                                <span className="text-emerald-400">✓ Quality check completed — PASS</span>
+                              )}
+                              {item.quality_check_status === "FAILED" && (
+                                <span className="text-red-400">✗ Quality check failed — replaced</span>
+                              )}
+                              {item.quality_check_status === "PENDING" && (
+                                <span className="text-amber-400">Quality check in progress…</span>
+                              )}
+                            </div>
                           )}
-                          {item.product.temperature_sensitive && (
-                            <span className="text-blue-400 font-semibold ml-2">TEMPERATURE-SENSITIVE</span>
-                          )}
-                          {!specialHandling && <span className="text-[#8b93ab]">Normal handling</span>}
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.picked ? (
-                          <span className="text-emerald-400 text-sm font-medium">✓ Picked</span>
-                        ) : (
-                          <button className="btn btn-secondary text-xs" onClick={() => act("mark_item_picked", item.id)}>
-                            Mark Item Picked
-                          </button>
-                        )}
-                        {item.damaged_reported ? (
-                          <span className="text-red-400 text-sm font-medium">Damage reported</span>
-                        ) : (
-                          <button
-                            className="btn btn-danger text-xs"
-                            onClick={() => act("report_damaged", item.id, "Reported at picking")}
-                          >
-                            Report Damaged Item
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {item.requires_inspection !== "none" && !item.quality_check_status && (
+                            <Link
+                              href={`/inspection/${order.id}/${item.id}`}
+                              className={item.requires_inspection === "required" ? "btn btn-danger text-xs" : "btn btn-secondary text-xs"}
+                            >
+                              Inspect with AI{item.requires_inspection === "recommended" ? " (optional)" : ""}
+                            </Link>
+                          )}
+                          {item.picked ? (
+                            <span className="text-emerald-400 text-sm font-medium">✓ Picked</span>
+                          ) : (
+                            <button className="btn btn-secondary text-xs" onClick={() => act("mark_item_picked", item.id)}>
+                              Mark Item Picked
+                            </button>
+                          )}
+                          {item.damaged_reported ? (
+                            <span className="text-red-400 text-sm font-medium">Damage reported</span>
+                          ) : (
+                            <button
+                              className="btn btn-danger text-xs"
+                              onClick={() => act("report_damaged", item.id, "Reported at picking")}
+                            >
+                              Report Damaged Item
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
         )}

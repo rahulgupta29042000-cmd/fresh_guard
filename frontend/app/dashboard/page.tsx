@@ -14,6 +14,7 @@ const RISK_COLORS: Record<string, string> = {
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [defects, setDefects] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,12 +22,14 @@ export default function DashboardPage() {
       .getDashboard()
       .then(setData)
       .catch((e) => setError(String(e)));
+    api.getDefectAnalytics().then(setDefects).catch(() => {});
   }, []);
 
   if (error) return <ErrorState message={error} />;
   if (!data) return <LoadingState label="Loading operations dashboard..." />;
 
   const maxRisk = Math.max(1, ...Object.values(data.risk_distribution));
+  const maxDefect = Math.max(1, ...(defects?.byType.map((d: any) => d.count) || [1]));
 
   return (
     <div className="space-y-6">
@@ -52,6 +55,51 @@ export default function DashboardPage() {
         />
         <StatCard label="Damage Rate" value={`${data.kpis.damage_rate}%`} />
         <StatCard label="Refund / Replacement Rate" value={`${data.kpis.refund_rate}%`} subtitle="simulated" />
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold mb-3">AI Inspection (Phase 2)</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <StatCard label="Inspected" value={String(data.ai_inspection.inspected)} />
+          <StatCard label="Passed" value={String(data.ai_inspection.passed)} />
+          <StatCard label="Review" value={String(data.ai_inspection.review)} />
+          <StatCard label="Rejected" value={String(data.ai_inspection.rejected)} />
+          <StatCard label="Reject Rate" value={`${data.ai_inspection.rejectRate}%`} />
+          <StatCard label="Human Override Rate" value={`${data.ai_inspection.humanOverrideRate}%`} subtitle={`of ${data.ai_inspection.humanReviewedCount} reviewed`} />
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        {defects && defects.byType.length > 0 && (
+          <div className="card p-5">
+            <h2 className="font-semibold mb-4">Defects by Type</h2>
+            <div className="space-y-3">
+              {defects.byType.map((d: any) => (
+                <div key={d.key} className="flex items-center gap-3">
+                  <span className="w-40 text-xs font-medium text-[#8b93ab] capitalize">{d.key.replace(/_/g, " ")}</span>
+                  <div className="flex-1 h-3 rounded-full bg-[#1b2233] overflow-hidden">
+                    <div className="h-full rounded-full bg-red-400" style={{ width: `${(d.count / maxDefect) * 100}%` }} />
+                  </div>
+                  <span className="w-14 text-right text-sm font-medium">{d.percent}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {defects && defects.byCategory.length > 0 && (
+          <div className="card p-5">
+            <h2 className="font-semibold mb-4">Defects by Category</h2>
+            <ul className="space-y-2">
+              {defects.byCategory.map((c: any) => (
+                <li key={c.key} className="flex justify-between text-sm">
+                  <span className="capitalize">{c.key}</span>
+                  <span className="text-[#8b93ab]">{c.count} ({c.percent}%)</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

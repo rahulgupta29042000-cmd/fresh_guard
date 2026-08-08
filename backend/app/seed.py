@@ -175,7 +175,7 @@ def weighted_sample_key(group):
     return random.choices(keys, weights=weights)[0]
 
 
-def simulate_item_inspection(db, order, item, products, backdate_to, force_pass=False, existing_inspection=None):
+def simulate_item_inspection(db, order, item, products, backdate_to, force_pass=False, existing_inspection=None, leave_review_pending=False):
     """Runs one item through the real VisionService (using a bundled sample
     image) and resolves a simulated human decision — this is what populates
     Phase 2 inspection history/analytics for seeded historical orders.
@@ -198,8 +198,11 @@ def simulate_item_inspection(db, order, item, products, backdate_to, force_pass=
         inspection_service.accept_inspection(db, inspection)
         final = "ACCEPT"
     elif status == "REVIEW":
-        final = "ACCEPT" if random.random() < 0.75 else "REJECT"
-        (inspection_service.accept_inspection if final == "ACCEPT" else inspection_service.reject_inspection)(db, inspection)
+        if leave_review_pending and random.random() < 0.6:
+            pass  # left for the QC review queue — not every REVIEW is resolved immediately
+        else:
+            final = "ACCEPT" if random.random() < 0.75 else "REJECT"
+            (inspection_service.accept_inspection if final == "ACCEPT" else inspection_service.reject_inspection)(db, inspection)
     elif status == "REJECT":
         final = "REJECT" if random.random() < 0.85 else "ACCEPT"
         (inspection_service.accept_inspection if final == "ACCEPT" else inspection_service.reject_inspection)(db, inspection)
@@ -223,7 +226,7 @@ def simulate_item_inspection(db, order, item, products, backdate_to, force_pass=
 STAGE_ORDER = ["RISK_ASSESSED", "PICKING", "PICKED", "PACKING", "PACKED", "DISPATCHED", "DELIVERED", "FEEDBACK_RECEIVED"]
 
 
-def advance_order(db, order, target_stage, pickers_for_wh, riders_for_wh, products):
+def advance_order(db, order, target_stage, pickers_for_wh, riders_for_wh, products, recent=False):
     target_idx = STAGE_ORDER.index(target_stage)
     t = order.order_time
 
@@ -244,7 +247,9 @@ def advance_order(db, order, target_stage, pickers_for_wh, riders_for_wh, produc
         # before packing, for items the risk engine flagged as inspectable.
         for item in list(order.items):
             if item.requires_inspection in ("required", "recommended") and not item.replaced:
-                simulate_item_inspection(db, order, item, products, order.picking_completed_at)
+                simulate_item_inspection(
+                    db, order, item, products, order.picking_completed_at, leave_review_pending=recent
+                )
 
     if target_idx >= STAGE_ORDER.index("PACKING"):
         db.refresh(order)
@@ -332,7 +337,7 @@ def create_historical_order(db, warehouses, products, pickers, riders, recent: b
     else:
         target = random.choices(["DELIVERED", "FEEDBACK_RECEIVED"], weights=[15, 85])[0]
 
-    advance_order(db, order, target, pickers_for_wh, riders_for_wh, products)
+    advance_order(db, order, target, pickers_for_wh, riders_for_wh, products, recent=recent)
     db.commit()
 
 

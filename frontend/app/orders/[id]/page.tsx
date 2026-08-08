@@ -154,13 +154,15 @@ export default function OrderDetailPage() {
               <th>Temp-Sensitive</th>
               <th>Product Risk</th>
               <th>Status</th>
+              <th>AI Inspection</th>
             </tr>
           </thead>
           <tbody>
             {order.items.map((item) => (
-              <tr key={item.id}>
+              <tr key={item.id} className={item.replaced ? "opacity-40" : ""}>
                 <td>
                   {item.product.emoji} {item.product.name}
+                  {item.replaced && <span className="text-xs text-[#8b93ab]"> (replaced)</span>}
                 </td>
                 <td>{item.quantity}</td>
                 <td>{item.product.fragility_score}</td>
@@ -173,6 +175,19 @@ export default function OrderDetailPage() {
                     <span className="text-emerald-400">Picked</span>
                   ) : (
                     <span className="text-[#8b93ab]">Pending</span>
+                  )}
+                </td>
+                <td>
+                  {item.requires_inspection === "none" ? (
+                    <span className="text-[#5b6480]">—</span>
+                  ) : item.quality_check_status === "PASSED" ? (
+                    <span className="text-emerald-400">✓ PASS</span>
+                  ) : item.quality_check_status === "FAILED" ? (
+                    <span className="text-red-400">✗ Replaced</span>
+                  ) : (
+                    <Link href={`/inspection/${order.id}/${item.id}`} className="text-[#4f7cff] hover:underline">
+                      {item.requires_inspection === "required" ? "Required →" : "Optional →"}
+                    </Link>
                   )}
                 </td>
               </tr>

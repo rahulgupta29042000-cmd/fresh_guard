@@ -40,6 +40,10 @@ export type OrderItem = {
   damaged_reported: boolean;
   damage_note: string | null;
   product_risk: number;
+  requires_inspection: "none" | "recommended" | "required";
+  quality_check_status: "PENDING" | "PASSED" | "FAILED" | null;
+  replaced: boolean;
+  replaced_by_item_id: number | null;
 };
 
 export type Order = {
@@ -94,6 +98,54 @@ export type DashboardData = {
   top_damaged_categories: { category: string; count: number }[];
   top_problematic_skus: { product: string; count: number }[];
   warehouse_comparison: { warehouse: string; orders: number; damage_free_rate: number; current_load: number; capacity: number }[];
+  ai_inspection: InspectionKpis;
+};
+
+// ---------------------------------------------------------------------------
+// Phase 2 — AI Computer Vision Quality Inspection
+// ---------------------------------------------------------------------------
+
+export type InspectionKpis = {
+  inspected: number;
+  passed: number;
+  review: number;
+  rejected: number;
+  rejectRate: number;
+  humanReviewedCount: number;
+  humanOverrideRate: number;
+};
+
+export type SampleImage = { key: string; label: string; product_hint: string; file: string };
+
+export type ImageOut = {
+  id: number;
+  url: string;
+  imageQuality: { score: number; status: "good" | "poor"; issues: string[] };
+  createdAt: string;
+};
+
+export type Defect = { type: string; confidence: number; severity: "low" | "medium" | "high"; description: string | null };
+
+export type Inspection = {
+  inspectionId: number;
+  orderId: number;
+  orderCode: string;
+  orderItemId: number;
+  product: { id: number; name: string; emoji: string; category: string };
+  attemptNumber: number;
+  qualityScore: number | null;
+  inspectionStatus: "PENDING" | "PASS" | "REVIEW" | "REJECT";
+  aiDecision: "PASS" | "REVIEW" | "REJECT" | null;
+  humanDecision: "ACCEPT" | "REJECT" | null;
+  mandatoryHumanReview: boolean;
+  modelVersion: string | null;
+  visionMode: string;
+  inspectionTimeMs: number | null;
+  image: ImageOut | null;
+  defects: Defect[];
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  createdAt: string;
 };
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -145,4 +197,44 @@ export const api = {
   listUsers: (role?: string) => request<any[]>(`/api/users${role ? `?role=${role}` : ""}`),
 
   getDashboard: () => request<DashboardData>("/api/dashboard"),
+
+  // Phase 2 — inspection
+  listSampleImages: () => request<SampleImage[]>("/api/images/samples"),
+  uploadSampleImage: (sample_key: string) =>
+    request<ImageOut>("/api/images/upload-sample", { method: "POST", body: JSON.stringify({ sample_key }) }),
+  uploadImageFile: async (file: File): Promise<ImageOut> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/api/images/upload`, { method: "POST", body: formData });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`);
+    return res.json();
+  },
+
+  createInspection: (order_id: number, order_item_id: number, image_id?: number) =>
+    request<Inspection>("/api/inspections", { method: "POST", body: JSON.stringify({ order_id, order_item_id, image_id }) }),
+  attachImage: (inspectionId: number, image_id: number) =>
+    request<Inspection>(`/api/inspections/${inspectionId}/image`, { method: "POST", body: JSON.stringify({ image_id }) }),
+  analyzeInspection: (inspectionId: number) =>
+    request<Inspection>(`/api/inspections/${inspectionId}/analyze`, { method: "POST" }),
+  acceptInspection: (inspectionId: number) =>
+    request<Inspection>(`/api/inspections/${inspectionId}/accept`, { method: "POST" }),
+  rejectInspection: (inspectionId: number) =>
+    request<Inspection>(`/api/inspections/${inspectionId}/reject`, { method: "POST" }),
+  reinspect: (inspectionId: number) =>
+    request<Inspection>(`/api/inspections/${inspectionId}/reinspect`, { method: "POST" }),
+  replaceItem: (inspectionId: number, replacement_product_id: number, reason?: string) =>
+    request<{ newOrderItem: OrderItem; newInspectionId: number; escalate: boolean; rejectionCount: number }>(
+      `/api/inspections/${inspectionId}/replace`,
+      { method: "POST", body: JSON.stringify({ replacement_product_id, reason }) }
+    ),
+  getInspection: (inspectionId: number) => request<Inspection>(`/api/inspections/${inspectionId}`),
+  listInspections: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request<Inspection[]>(`/api/inspections${qs ? `?${qs}` : ""}`);
+  },
+
+  getReviewQueue: () => request<{ count: number; items: Inspection[] }>("/api/qc/review-queue"),
+
+  getInspectionAnalytics: () => request<any>("/api/analytics/inspections"),
+  getDefectAnalytics: () => request<any>("/api/analytics/defects"),
 };

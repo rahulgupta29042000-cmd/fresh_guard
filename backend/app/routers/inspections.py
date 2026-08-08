@@ -27,6 +27,8 @@ def create_inspection(payload: schemas.InspectionCreate, db: Session = Depends(g
 
 @router.get("")
 def list_inspections(
+    order_id: Optional[int] = Query(default=None),
+    order_item_id: Optional[int] = Query(default=None),
     product_id: Optional[int] = Query(default=None),
     defect_type: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None, description="PENDING | PASS | REVIEW | REJECT"),
@@ -37,6 +39,10 @@ def list_inspections(
     db: Session = Depends(get_db),
 ):
     q = _query(db)
+    if order_id:
+        q = q.filter(models.Inspection.order_id == order_id)
+    if order_item_id:
+        q = q.filter(models.Inspection.order_item_id == order_item_id)
     if product_id:
         q = q.filter(models.Inspection.product_id == product_id)
     if status:
