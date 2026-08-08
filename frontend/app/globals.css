@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0f1420;
+  color: #e6e9f2;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.card {
+  background-color: #161c2c;
+  border: 1px solid #232b40;
+  border-radius: 0.75rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+table.data-table th {
+  text-align: left;
+  color: #8b93ab;
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid #232b40;
+}
+
+table.data-table td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid #1b2233;
+}
+
+table.data-table tr:hover td {
+  background-color: #1a2136;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: #4f7cff;
+  color: white;
+}
+
+.btn-secondary {
+  background-color: transparent;
+  border-color: #2c3550;
+  color: #cfd5e6;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  color: white;
+}
