@@ -49,9 +49,14 @@ def seeded(db_session):
         name="Glass Sauce Bottle", category="condiments", weight_kg=0.4, fragility_score=90,
         temperature_sensitive=False, packaging_type="glass", historical_damage_rate=0.15,
     )
-    db_session.add_all([product1, product2])
+    product3 = models.Product(
+        name="Apples", category="produce", weight_kg=0.18, fragility_score=20,
+        temperature_sensitive=False, packaging_type="bag", historical_damage_rate=0.04,
+    )
+    db_session.add_all([product1, product2, product3])
     db_session.commit()
     db_session.refresh(warehouse)
     db_session.refresh(product1)
     db_session.refresh(product2)
-    return {"warehouse": warehouse, "product1": product1, "product2": product2}
+    db_session.refresh(product3)
+    return {"warehouse": warehouse, "product1": product1, "product2": product2, "product3": product3}
