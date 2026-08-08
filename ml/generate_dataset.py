@@ -77,21 +77,21 @@ def label_from_features(df: pd.DataFrame) -> np.ndarray:
     but not deterministic, like real-world data would be.
     """
     z = (
-        -3.2
-        + 0.028 * df["max_fragility"]
-        + 0.014 * df["avg_fragility"]
-        + 0.10 * df["n_fragile_items"]
-        + 0.055 * df["n_items"]
-        + 0.05 * df["n_distinct_skus"]
-        + 6.0 * df["avg_historical_damage_rate"]
-        + 0.16 * df["n_temperature_sensitive_items"]
+        -6.8
+        + 0.05 * df["max_fragility"]
+        + 0.015 * df["avg_fragility"]
+        + 0.30 * df["n_fragile_items"]
+        + 0.05 * df["n_items"]
+        + 0.04 * df["n_distinct_skus"]
+        + 5.0 * df["avg_historical_damage_rate"]
+        + 0.30 * df["n_temperature_sensitive_items"]
         + 0.05 * df["distance_km"]
-        + 1.1 * df["warehouse_load_ratio"]
-        + 0.55 * df["is_peak_hour"]
-        - 0.22 * df["picker_experience_years"]
-        - 0.018 * df["picker_avg_quality_score"]
-        - 0.12 * df["rider_experience_years"]
-        - 0.35 * df["rider_avg_rating"]
+        + 2.0 * df["warehouse_load_ratio"]
+        + 1.2 * df["is_peak_hour"]
+        - 0.18 * df["picker_experience_years"]
+        - 0.014 * df["picker_avg_quality_score"]
+        - 0.08 * df["rider_experience_years"]
+        - 0.25 * df["rider_avg_rating"]
     )
     noise = RNG.normal(0, 1.1, len(df))
     prob = 1 / (1 + np.exp(-(z + noise)))
