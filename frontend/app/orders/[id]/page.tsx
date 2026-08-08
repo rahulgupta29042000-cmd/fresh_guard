@@ -167,7 +167,12 @@ export default function OrderDetailPage() {
                 <td>{item.quantity}</td>
                 <td>{item.product.fragility_score}</td>
                 <td>{item.product.temperature_sensitive ? "Yes" : "No"}</td>
-                <td>{item.product_risk}</td>
+                <td>
+                  <div className="flex items-center gap-2">
+                    <span>{item.product_risk}</span>
+                    <RiskBadge level={item.product_risk_level} />
+                  </div>
+                </td>
                 <td>
                   {item.damaged_reported ? (
                     <span className="text-red-400">Damaged reported</span>

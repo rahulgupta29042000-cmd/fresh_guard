@@ -1,6 +1,7 @@
 import datetime
 from typing import Optional
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
@@ -80,6 +81,7 @@ def list_orders(
     warehouse_id: Optional[int] = Query(default=None),
     status: Optional[str] = Query(default=None),
     date: Optional[str] = Query(default=None, description="YYYY-MM-DD"),
+    search: Optional[str] = Query(default=None, description="Order code or product name"),
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
 ):
@@ -99,6 +101,14 @@ def list_orders(
             models.Order.order_time >= datetime.datetime.combine(day, datetime.time.min),
             models.Order.order_time <= datetime.datetime.combine(day, datetime.time.max),
         )
+    if search:
+        pattern = f"%{search.strip()}%"
+        matching_order_ids = (
+            db.query(models.OrderItem.order_id)
+            .join(models.Product, models.OrderItem.product_id == models.Product.id)
+            .filter(models.Product.name.ilike(pattern))
+        )
+        q = q.filter(sa.or_(models.Order.order_code.ilike(pattern), models.Order.id.in_(matching_order_ids)))
 
     orders = q.order_by(models.Order.order_time.desc()).limit(limit).all()
     return [serializers.order_to_out(o) for o in orders]

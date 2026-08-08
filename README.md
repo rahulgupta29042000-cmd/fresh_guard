@@ -1,11 +1,24 @@
 # Fresh_Guard
 
-AI-powered quality-risk prediction **and** AI-powered visual quality
-inspection for quick-commerce/e-commerce fulfillment.
+An AI-powered Quality Assurance MVP for quick-commerce/e-commerce
+fulfillment: **Predict → Inspect → Act → Learn.**
 
-> **This is a Phase 1 + Phase 2 prototype built on synthetic/simulated
-> data.** It validates a product concept, not a production-grade damage-
-> prediction or quality-control system. See [Known Limitations](#known-limitations).
+> **This is an MVP prototype built on synthetic/simulated data.** It
+> validates a product concept, not a production-grade damage-prediction
+> or quality-control system. See [Known Limitations](#known-limitations).
+
+- **Predict** — identify which orders/products are more likely to have
+  quality issues before fulfillment starts.
+- **Inspect** — AI-assisted visual inspection for the specific high-risk
+  products a risk-based rule flags, not every item.
+- **Act** — turn predictions into concrete pick/pack/delivery instructions
+  for pickers, QC reviewers, and delivery partners.
+- **Learn** — capture every human decision and customer feedback event so
+  future quality intelligence has real outcome data to learn from.
+
+Three lightweight roles — **Operations Manager**, **Picker**, **QC
+Reviewer** — switchable from the nav bar (no real auth; see
+[MVP additions](#mvp-additions)) — shape which screens are emphasized.
 
 ## What Fresh_Guard Is
 
@@ -62,6 +75,54 @@ production-scale CV infrastructure. Fresh_Guard does **not** claim to
 detect internal spoilage or any defect that isn't visible in the photo —
 the UI always says "visible quality inspection," never "quality
 guarantee."
+
+## MVP Additions
+
+Everything above (Phase 1 risk prediction, Phase 2 vision inspection,
+picker/packing/delivery/feedback workflow, ~230 seeded orders + ~540 real
+seeded inspections) already existed going into the MVP round. What's new
+here is turning that into a coherent, navigable **product**, not new
+prediction/inspection capability:
+
+- **Role-based navigation** (`frontend/lib/role.tsx`) — a lightweight
+  Operations Manager / Picker / QC Reviewer switcher (localStorage, no
+  real auth) that reorders the nav bar and sets the default landing route
+  per role. Every route stays reachable regardless of role — this is
+  about surfacing the right screen first, not access control.
+- **`/analytics`** — a dedicated page (separate from the operational
+  `/dashboard`) with Quality/AI-Decisions/Defects/Operational sections and
+  a 14-day quality trend chart, backed by a single `GET
+  /api/analytics/overview` endpoint. Adds metrics that didn't exist
+  before: **replacement rate**, **high-risk order rate**, and **customer
+  issue rate** as explicit KPIs.
+- **Orders search** — search by order code or product name (`?search=`),
+  plus a per-order **Inspection Status** column (Not Required / Pending /
+  Passed / Issues, computed from that order's non-replaced items).
+- **Per-item risk labels** — order detail now shows a LOW/MEDIUM/HIGH/
+  CRITICAL badge next to each item's numeric product-risk score, not just
+  the number.
+- **`.env.example`** (`backend/.env.example`) — `DATABASE_URL`,
+  `VISION_MODE`, `VISION_API_KEY`, `MODEL_VERSION`, `DEMO_MODE`, all with
+  working defaults. `DEMO_MODE` (default `true`) surfaces as a small
+  badge in the nav bar via `GET /api/health`.
+- **A committed Playwright end-to-end test**
+  (`frontend/e2e/critical-path.spec.ts`) — the brief's most important
+  test (order → risk → inspect → REJECT → replace → reinspect → PASS →
+  pack → deliver → feedback → analytics), run against the real seeded
+  `FG-10241` order through the real UI, not mocked.
+
+**Decisions made without asking**, in order of how much they trade off:
+staying on **SQLite** instead of standing up Postgres (schema is already
+Postgres-compatible via `DATABASE_URL`; a real Postgres server adds infra
+risk to a "must demo reliably" requirement with no functional upside at
+this scale); **not renaming** the order-status enum to the brief's
+suggested `CREATED/PICKING/INSPECTION_REQUIRED/PACKING/
+READY_FOR_DELIVERY/DELIVERED` list, since the existing one (`CREATED →
+RISK_ASSESSED → PICKING → PICKED → PACKING → PACKED → DISPATCHED →
+DELIVERED → FEEDBACK_RECEIVED`) is a strict superset with finer
+granularity and renaming it would touch every router/test/frontend call
+site for no behavioral change; and **skipping Docker**, since nothing
+here needs it and it was explicitly P2.
 
 ## Architecture
 
@@ -272,14 +333,20 @@ fresh_guard/
                                    dashboard, reference (Phase 1); images,
                                    inspections, qc, analytics (Phase 2)
     tests/                       pytest: 50 tests across both phases
+    .env.example                 DATABASE_URL, VISION_MODE, VISION_API_KEY,
+                                  MODEL_VERSION, DEMO_MODE
   frontend/
     app/                         dashboard, orders, orders/[id], picker,
                                   packing/[orderId], delivery/[orderId],
                                   feedback/[orderId] (Phase 1); inspection/
-                                  [orderId]/[itemId], inspections, qc/review (Phase 2)
+                                  [orderId]/[itemId], inspections, qc/review
+                                  (Phase 2); analytics (MVP)
     components/                  RiskBadge/RiskGauge (Phase 1);
                                   InspectionStatusBadge/QualityScoreGauge (Phase 2)
     lib/api.ts                   typed fetch client for the backend
+    lib/role.tsx                 role-based nav (MVP)
+    e2e/critical-path.spec.ts    Playwright end-to-end test (MVP)
+    playwright.config.ts
 ```
 
 ## API
@@ -287,7 +354,8 @@ fresh_guard/
 **Phase 1:**
 ```
 POST   /api/orders                          create order (runs risk assessment automatically)
-GET    /api/orders                           list orders (filter: risk_level, warehouse_id, status, date)
+GET    /api/orders                           list orders (filter: risk_level, warehouse_id, status,
+                                               date, search — order code or product name)
 GET    /api/orders/:id                        order detail (items + latest risk)
 GET    /api/orders/:id/risk                    latest risk result
 POST   /api/orders/:id/recalculate-risk        re-run the risk engine (e.g. after picker assignment)
@@ -328,6 +396,17 @@ GET    /api/analytics/inspections              inspected/passed/review/rejected,
 GET    /api/analytics/defects                  defects by type/category/SKU/warehouse/day
 ```
 
+**MVP:**
+```
+GET    /api/analytics/overview                single-fetch payload for /analytics: quality
+                                                (damage-free/customer-issue rate, rejected products,
+                                                inspection volume), ai (pass/review/reject, overrides),
+                                                defects by type, operational (avg inspection time,
+                                                replacement rate, high-risk order rate), 14-day
+                                                quality trend
+GET    /api/health                            {status, demoMode, visionMode, modelVersion}
+```
+
 ## How to Run Locally
 
 Requires Python 3.11+ and Node 20+.
@@ -347,6 +426,7 @@ python3 generate_sample_images.py
 # 3. Backend
 cd ../../backend
 pip install -r requirements.txt
+cp .env.example .env       # optional — every value has a working default
 python3 -m app.seed        # resets the DB; seeds ~230 orders + ~540 real inspections + demo order FG-10241
 python3 -m uvicorn app.main:app --reload --port 8000
 
@@ -452,11 +532,18 @@ Walk it end-to-end without touching the database:
 ## Testing
 
 ```bash
+# Backend (pytest)
 cd backend
 python3 -m pytest tests/ -v
+
+# Frontend end-to-end (Playwright) — needs BOTH servers running (see
+# "How to Run Locally") and a fresh `python3 -m app.seed`, since the test
+# consumes FG-10241's pristine state exactly like a real demo would.
+cd frontend
+npx playwright test
 ```
 
-**50 tests** (all passing):
+**50 backend tests** (all passing):
 
 - **Phase 1 (20):** risk-level bands, rule-based fallback, bounded
   component scores; API validation (missing warehouse/product, invalid
@@ -473,11 +560,40 @@ python3 -m pytest tests/ -v
   order→risk→inspect→reject→replace→reinspect→pass→packing (replaced
   item correctly excluded)→delivery→feedback→analytics test.
 
+**1 Playwright end-to-end test** (`frontend/e2e/critical-path.spec.ts`,
+passing) drives the exact same critical path through the real rendered
+UI, clicking real buttons against the real FG-10241 demo order: risk →
+pick → inspect → REJECT (bruising) → replace → reinspect → PASS → accept
+→ pack → deliver → feedback → analytics — with no manual database
+intervention at any step.
+
+## MVP Success Criteria
+
+All pass against a freshly-seeded database, verified both via the
+Playwright test above and manually in a real browser:
+
+- [x] Select a role (Operations Manager / Picker / QC Reviewer)
+- [x] Open dashboard, see operational quality metrics
+- [x] Open an order, understand its risk (score, factors, recommendations)
+- [x] Start picking
+- [x] Inspect a high-risk product with AI
+- [x] Receive a quality score, defect, confidence, and PASS/REVIEW/REJECT
+- [x] Accept/reject/review the product (human-in-the-loop)
+- [x] Replace a rejected product
+- [x] Reinspect the replacement
+- [x] Complete picking
+- [x] Follow packing recommendations
+- [x] Complete delivery
+- [x] Submit customer feedback
+- [x] See analytics update — no manual DB edits anywhere in the loop
+
 ## Known Limitations
 
 **General:**
 - **No auth/multi-tenancy**, single shared dataset — out of scope for a
-  concept prototype.
+  concept prototype. Role switching (Operations Manager/Picker/QC
+  Reviewer) only changes nav emphasis and the default landing route; it
+  is not access control — every route stays reachable from every role.
 - **SQLite, single-process** — fine locally; would need Postgres +
   connection pooling for concurrent multi-user use.
 - **Next.js 14.2.x, not the latest.** `npm audit` flags advisories fixed

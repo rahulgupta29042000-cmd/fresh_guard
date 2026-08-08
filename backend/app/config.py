@@ -5,7 +5,23 @@ app — tuning Phase 1 behavior should mean editing this file only.
 """
 import os
 
-MODEL_VERSION = "v0.1-prototype"
+from dotenv import load_dotenv
+
+# Loads backend/.env if present (see .env.example). Every variable below
+# has a working default, so this is optional for local/demo use.
+load_dotenv()
+
+MODEL_VERSION = os.environ.get("MODEL_VERSION", "v0.1-prototype")
+
+# Demo mode is on by default for this MVP — seeded data, simulation vision,
+# and the reliable FG-10241 walkthrough are all designed around it. Set
+# DEMO_MODE=false only once real data sources replace the seed script.
+DEMO_MODE = os.environ.get("DEMO_MODE", "true").lower() in ("1", "true", "yes")
+
+# Not read by the simulation provider — present so a future real vision
+# provider has a standard place to pick up credentials from, per the
+# "never hard-code API keys" requirement.
+VISION_API_KEY = os.environ.get("VISION_API_KEY", "")
 
 # Damage Risk Score (0-100) -> Risk Level bands.
 RISK_THRESHOLDS = {

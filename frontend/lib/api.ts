@@ -40,6 +40,7 @@ export type OrderItem = {
   damaged_reported: boolean;
   damage_note: string | null;
   product_risk: number;
+  product_risk_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   requires_inspection: "none" | "recommended" | "required";
   quality_check_status: "PENDING" | "PASSED" | "FAILED" | null;
   replaced: boolean;
@@ -61,6 +62,7 @@ export type Order = {
   risk_score: number | null;
   risk_level: string | null;
   item_count: number;
+  inspection_status: "not_required" | "pending" | "passed" | "issues";
 };
 
 export type OrderDetail = Order & {
@@ -99,6 +101,32 @@ export type DashboardData = {
   top_problematic_skus: { product: string; count: number }[];
   warehouse_comparison: { warehouse: string; orders: number; damage_free_rate: number; current_load: number; capacity: number }[];
   ai_inspection: InspectionKpis;
+};
+
+export type AnalyticsOverview = {
+  note: string;
+  quality: {
+    damageFreeRate: number;
+    customerIssueRate: number;
+    rejectedProducts: number;
+    aiInspectionVolume: number;
+    deliveredOrders: number;
+  };
+  ai: {
+    pass: number;
+    review: number;
+    reject: number;
+    humanOverrides: number;
+    rejectRate: number;
+    humanOverrideRate: number;
+  };
+  defects: { byType: { key: string; count: number }[] };
+  operational: {
+    avgInspectionTimeMs: number | null;
+    replacementRate: number;
+    highRiskOrderRate: number;
+  };
+  qualityTrend: { date: string; damageFreeRate: number; orders: number }[];
 };
 
 // ---------------------------------------------------------------------------
@@ -237,4 +265,5 @@ export const api = {
 
   getInspectionAnalytics: () => request<any>("/api/analytics/inspections"),
   getDefectAnalytics: () => request<any>("/api/analytics/defects"),
+  getAnalyticsOverview: () => request<AnalyticsOverview>("/api/analytics/overview"),
 };

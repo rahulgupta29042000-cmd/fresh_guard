@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import models
+from . import config, models
 from .database import Base, engine
 from .routers import (
     analytics,
@@ -44,4 +44,10 @@ app.include_router(analytics.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "fresh-guard-api"}
+    return {
+        "status": "ok",
+        "service": "fresh-guard-api",
+        "demoMode": config.DEMO_MODE,
+        "visionMode": config.VISION_MODE,
+        "modelVersion": config.MODEL_VERSION,
+    }

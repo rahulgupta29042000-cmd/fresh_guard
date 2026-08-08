@@ -27,6 +27,9 @@ ml/holdout.csv
 # Frontend
 frontend/.next/
 frontend/out/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 
 # Phase 2 — runtime-uploaded inspection images (seeded samples in data/images/samples/ ARE committed)
 data/images/*.jpg

@@ -8,6 +8,8 @@ from ..database import get_db
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
+DELIVERED_STATUSES = ("DELIVERED", "FEEDBACK_RECEIVED")
+
 
 @router.get("/inspections")
 def inspection_analytics_endpoint(db: Session = Depends(get_db)):
@@ -83,4 +85,76 @@ def defect_analytics(db: Session = Depends(get_db)):
         "bySku": by_sku[:10],
         "byWarehouse": by_warehouse,
         "byDay": sorted(by_day, key=lambda x: x["key"]),
+    }
+
+
+@router.get("/overview")
+def analytics_overview(db: Session = Depends(get_db)):
+    """Single-fetch payload for the /analytics page: Quality, AI, Defects,
+    and Operational sections (section 21/22 of the MVP brief)."""
+    orders = db.query(models.Order).all()
+    delivered_orders = [o for o in orders if o.status in DELIVERED_STATUSES]
+    feedback = db.query(models.Feedback).options(joinedload(models.Feedback.order)).all()
+
+    no_issue = sum(1 for f in feedback if f.issue_type == "none")
+    damage_free_rate = round(no_issue / len(feedback) * 100, 1) if feedback else 100.0
+    customer_issue_rate = round(100 - damage_free_rate, 1)
+
+    inspections = db.query(models.Inspection).filter(models.Inspection.ai_decision.isnot(None)).all()
+    ai = inspection_analytics.summary(db)
+
+    replacement_events = db.query(models.ReplacementEvent).count()
+    replacement_rate = round(replacement_events / len(inspections) * 100, 1) if inspections else 0.0
+
+    risk_assessed_orders = [o for o in orders if o.risk_level]
+    high_risk_orders = [o for o in risk_assessed_orders if o.risk_level in ("HIGH", "CRITICAL")]
+    high_risk_order_rate = round(len(high_risk_orders) / len(risk_assessed_orders) * 100, 1) if risk_assessed_orders else 0.0
+
+    times = [i.inspection_time_ms for i in inspections if i.inspection_time_ms is not None]
+    avg_inspection_time_ms = round(sum(times) / len(times)) if times else None
+
+    defect_counts: dict = {}
+    for i in inspections:
+        for d in i.defects:
+            defect_counts[d.defect_type] = defect_counts.get(d.defect_type, 0) + 1
+    defects_by_type = sorted(
+        [{"key": k, "count": v} for k, v in defect_counts.items()], key=lambda x: -x["count"]
+    )
+
+    # Quality trend: damage-free rate per day, last 14 days with feedback.
+    by_day: dict = {}
+    for f in feedback:
+        day = f.order.order_time.date().isoformat() if f.order else None
+        if not day:
+            continue
+        by_day.setdefault(day, []).append(f.issue_type == "none")
+    trend = [
+        {"date": day, "damageFreeRate": round(sum(vals) / len(vals) * 100, 1), "orders": len(vals)}
+        for day, vals in sorted(by_day.items())
+    ][-14:]
+
+    return {
+        "note": "Prototype analytics based on simulated/demo data.",
+        "quality": {
+            "damageFreeRate": damage_free_rate,
+            "customerIssueRate": customer_issue_rate,
+            "rejectedProducts": ai["rejected"],
+            "aiInspectionVolume": ai["inspected"],
+            "deliveredOrders": len(delivered_orders),
+        },
+        "ai": {
+            "pass": ai["passed"],
+            "review": ai["review"],
+            "reject": ai["rejected"],
+            "humanOverrides": round(ai["humanOverrideRate"] * ai["humanReviewedCount"] / 100) if ai["humanReviewedCount"] else 0,
+            "rejectRate": ai["rejectRate"],
+            "humanOverrideRate": ai["humanOverrideRate"],
+        },
+        "defects": {"byType": defects_by_type[:10]},
+        "operational": {
+            "avgInspectionTimeMs": avg_inspection_time_ms,
+            "replacementRate": replacement_rate,
+            "highRiskOrderRate": high_risk_order_rate,
+        },
+        "qualityTrend": trend,
     }

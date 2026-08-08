@@ -20,6 +20,18 @@ def order_items_risk_input(order: models.Order) -> list:
     return [order_item_to_risk_input(oi) for oi in order.items]
 
 
+def order_inspection_status(order: models.Order) -> str:
+    active_items = [i for i in order.items if not i.replaced]
+    inspectable = [i for i in active_items if i.requires_inspection != "none"]
+    if not inspectable:
+        return "not_required"
+    if any(i.quality_check_status == "FAILED" for i in inspectable):
+        return "issues"
+    if any(i.quality_check_status in (None, "PENDING") for i in inspectable):
+        return "pending"
+    return "passed"
+
+
 def order_to_out(order: models.Order) -> dict:
     return {
         "id": order.id,
@@ -36,11 +48,12 @@ def order_to_out(order: models.Order) -> dict:
         "risk_score": order.risk_score,
         "risk_level": order.risk_level,
         "item_count": sum(i.quantity for i in order.items),
+        "inspection_status": order_inspection_status(order),
     }
 
 
 def order_item_to_out(order_item: models.OrderItem) -> dict:
-    from .config import risk_level_for_score  # noqa: F401  (kept local to avoid unused import warnings)
+    from .config import risk_level_for_score
 
     p = order_item.product
     item_product_risk = round(
@@ -64,6 +77,7 @@ def order_item_to_out(order_item: models.OrderItem) -> dict:
         "picked": order_item.picked,
         "damaged_reported": order_item.damaged_reported,
         "damage_note": order_item.damage_note,
+        "product_risk_level": risk_level_for_score(item_product_risk),
         "product_risk": item_product_risk,
         "requires_inspection": order_item.requires_inspection,
         "quality_check_status": order_item.quality_check_status,

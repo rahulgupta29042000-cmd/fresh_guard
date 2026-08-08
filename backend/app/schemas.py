@@ -40,6 +40,7 @@ class OrderItemOut(BaseModel):
     damaged_reported: bool
     damage_note: Optional[str] = None
     product_risk: Optional[float] = None
+    product_risk_level: str = "LOW"  # LOW | MEDIUM | HIGH | CRITICAL
     requires_inspection: str = "none"  # none | recommended | required
     quality_check_status: Optional[str] = None  # PENDING | PASSED | FAILED
     replaced: bool = False
@@ -86,6 +87,7 @@ class OrderOut(BaseModel):
     risk_score: Optional[int]
     risk_level: Optional[str]
     item_count: int
+    inspection_status: str = "not_required"  # not_required | pending | passed | issues
 
     model_config = ConfigDict(from_attributes=True)
 
