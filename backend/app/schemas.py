@@ -1,7 +1,7 @@
 import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrderItemCreate(BaseModel):
@@ -29,8 +29,7 @@ class ProductOut(BaseModel):
     packaging_type: str
     historical_damage_rate: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrderItemOut(BaseModel):
@@ -42,8 +41,7 @@ class OrderItemOut(BaseModel):
     damage_note: Optional[str] = None
     product_risk: Optional[float] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RiskFactor(BaseModel):
@@ -85,8 +83,7 @@ class OrderOut(BaseModel):
     risk_level: Optional[str]
     item_count: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrderDetailOut(OrderOut):
@@ -101,8 +98,7 @@ class RecommendationOut(BaseModel):
     priority: str
     completed: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PickingAction(BaseModel):
