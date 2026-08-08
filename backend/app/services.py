@@ -1,6 +1,7 @@
 import json
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import models, recommendations, risk_engine, serializers
@@ -123,7 +124,11 @@ def get_or_create_packing_plan(db: Session, order: models.Order) -> models.Packi
         return order.packing_plan
     plan = models.PackingPlan(order_id=order.id, plan_json=json.dumps(build_packing_plan(order)), status="proposed")
     db.add(plan)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return db.query(models.PackingPlan).filter(models.PackingPlan.order_id == order.id).one()
     db.refresh(plan)
     return plan
 
@@ -156,6 +161,10 @@ def get_or_create_delivery_instruction(db: Session, order: models.Order) -> mode
         temperature_sensitive_item_count=temp_count,
     )
     db.add(di)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return db.query(models.DeliveryInstruction).filter(models.DeliveryInstruction.order_id == order.id).one()
     db.refresh(di)
     return di
