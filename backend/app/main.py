@@ -3,11 +3,23 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import models
 from .database import Base, engine
-from .routers import dashboard, delivery, feedback, orders, packing, picking, reference
+from .routers import (
+    analytics,
+    dashboard,
+    delivery,
+    feedback,
+    images,
+    inspections,
+    orders,
+    packing,
+    picking,
+    qc,
+    reference,
+)
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Fresh_Guard API", version="0.1.0")
+app = FastAPI(title="Fresh_Guard API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +36,10 @@ app.include_router(packing.router)
 app.include_router(delivery.router)
 app.include_router(feedback.router)
 app.include_router(dashboard.router)
+app.include_router(images.router)
+app.include_router(inspections.router)
+app.include_router(qc.router)
+app.include_router(analytics.router)
 
 
 @app.get("/api/health")

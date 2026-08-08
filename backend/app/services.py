@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from . import models, recommendations, risk_engine, serializers
+from .vision import eligibility
 
 
 def get_order_or_404(db: Session, order_id: int) -> models.Order:
@@ -65,6 +66,13 @@ def run_risk_assessment(db: Session, order: models.Order) -> dict:
     for rec in rec_dicts:
         db.add(models.Recommendation(order_id=order.id, type=rec["type"], instruction=rec["instruction"], priority=rec["priority"]))
 
+    for oi in order.items:
+        if oi.replaced:
+            continue
+        oi.requires_inspection = eligibility.compute_inspection_requirement(
+            result["risk_level"], oi.product.category, oi.product.packaging_type, oi.product.fragility_score
+        )
+
     db.commit()
     db.refresh(order)
 
@@ -88,6 +96,8 @@ GENERAL_BAG = "GENERAL"
 def build_packing_plan(order: models.Order) -> list:
     bags = {FRAGILE_CATEGORY_BAG: [], COLD_BAG: [], PRODUCE_BAG: [], LIGHTWEIGHT_BAG: [], GENERAL_BAG: []}
     for oi in order.items:
+        if oi.replaced:
+            continue
         p = oi.product
         entry = {"order_item_id": oi.id, "name": p.name}
         if p.fragility_score >= 65:

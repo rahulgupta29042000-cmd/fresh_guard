@@ -65,6 +65,10 @@ def order_item_to_out(order_item: models.OrderItem) -> dict:
         "damaged_reported": order_item.damaged_reported,
         "damage_note": order_item.damage_note,
         "product_risk": item_product_risk,
+        "requires_inspection": order_item.requires_inspection,
+        "quality_check_status": order_item.quality_check_status,
+        "replaced": order_item.replaced,
+        "replaced_by_item_id": order_item.replaced_by_item_id,
     }
 
 
@@ -94,4 +98,56 @@ def recommendation_to_out(rec: models.Recommendation) -> dict:
         "instruction": rec.instruction,
         "priority": rec.priority,
         "completed": rec.completed,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — AI Computer Vision Quality Inspection
+# ---------------------------------------------------------------------------
+
+
+def image_to_out(image: models.InspectionImage) -> dict:
+    return {
+        "id": image.id,
+        "url": f"/api/images/{image.id}/file",
+        "imageQuality": {
+            "score": image.image_quality_score,
+            "status": image.image_quality_status,
+            "issues": json.loads(image.image_quality_issues) if image.image_quality_issues else [],
+        },
+        "createdAt": image.created_at,
+    }
+
+
+def defect_to_out(defect: models.InspectionDefect) -> dict:
+    return {
+        "type": defect.defect_type,
+        "confidence": defect.confidence,
+        "severity": defect.severity,
+        "description": defect.description,
+    }
+
+
+def inspection_to_out(inspection: models.Inspection) -> dict:
+    p = inspection.product
+    return {
+        "inspectionId": inspection.id,
+        "orderId": inspection.order_id,
+        "orderCode": inspection.order.order_code if inspection.order else None,
+        "orderItemId": inspection.order_item_id,
+        "product": {"id": p.id, "name": p.name, "emoji": p.emoji, "category": p.category},
+        "attemptNumber": inspection.attempt_number,
+        "qualityScore": inspection.quality_score,
+        "inspectionStatus": inspection.inspection_status,
+        "aiDecision": inspection.ai_decision,
+        "humanDecision": inspection.human_decision,
+        "mandatoryHumanReview": inspection.mandatory_human_review,
+        "modelVersion": inspection.model_version,
+        "visionMode": inspection.vision_mode,
+        "inspectionTimeMs": inspection.inspection_time_ms,
+        "image": image_to_out(inspection.image) if inspection.image else None,
+        "defects": [defect_to_out(d) for d in inspection.defects],
+        "reviewedAt": inspection.reviewed_at,
+        "reviewedBy": inspection.reviewed_by.name if inspection.reviewed_by else None,
+        "createdAt": inspection.created_at,
     }

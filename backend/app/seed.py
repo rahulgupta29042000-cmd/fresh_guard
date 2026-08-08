@@ -10,10 +10,24 @@ import datetime
 import json
 import random
 
-from . import models, services
+from . import inspection_service, models, services
 from .database import Base, SessionLocal, engine
+from .vision import categories as vision_categories
 
 random.seed(7)
+
+# Phase 2 — which bundled sample image to "capture" for a simulated
+# inspection, weighted toward PASS (matches realistic warehouse quality).
+SAMPLE_BY_GROUP = {
+    vision_categories.PRODUCE: [("tomato_good", 0.72), ("tomato_bruised_review", 0.18), ("tomato_severe_reject", 0.10)],
+    vision_categories.PACKAGED_GOODS: [("chips_good", 0.78), ("chips_crushed_reject", 0.22)],
+    vision_categories.FRAGILE_GLASS: [("glass_good", 0.72), ("glass_crack_review", 0.28)],
+}
+GOOD_SAMPLE_BY_GROUP = {
+    vision_categories.PRODUCE: "tomato_good",
+    vision_categories.PACKAGED_GOODS: "chips_good",
+    vision_categories.FRAGILE_GLASS: "glass_good",
+}
 
 FIRST_NAMES = [
     "Aarav", "Vivaan", "Aditi", "Ananya", "Diya", "Ishaan", "Kabir", "Meera",
@@ -153,10 +167,63 @@ def pick_damaged_item(items, issue_type):
     return candidates[0] if candidates else (items[0] if items else None)
 
 
+def weighted_sample_key(group):
+    options = SAMPLE_BY_GROUP.get(group)
+    if not options:
+        return None
+    keys, weights = zip(*options)
+    return random.choices(keys, weights=weights)[0]
+
+
+def simulate_item_inspection(db, order, item, products, backdate_to, force_pass=False, existing_inspection=None):
+    """Runs one item through the real VisionService (using a bundled sample
+    image) and resolves a simulated human decision — this is what populates
+    Phase 2 inspection history/analytics for seeded historical orders.
+    `existing_inspection` reuses the inspection replace_item() already
+    created for a replacement item, instead of creating a duplicate."""
+    group = vision_categories.defect_group_for_product(item.product.category, item.product.packaging_type)
+    sample_key = GOOD_SAMPLE_BY_GROUP.get(group) if force_pass else weighted_sample_key(group)
+    if not sample_key:
+        return
+
+    image = inspection_service.save_sample_image(db, sample_key)
+    inspection = existing_inspection or inspection_service.create_inspection(db, order.id, item.id, image.id)
+    if existing_inspection:
+        inspection = inspection_service.attach_image(db, inspection, image.id)
+    inspection = inspection_service.analyze_inspection(db, inspection)
+
+    status = inspection.inspection_status
+    final = None
+    if status == "PASS" and random.random() < 0.12:
+        inspection_service.accept_inspection(db, inspection)
+        final = "ACCEPT"
+    elif status == "REVIEW":
+        final = "ACCEPT" if random.random() < 0.75 else "REJECT"
+        (inspection_service.accept_inspection if final == "ACCEPT" else inspection_service.reject_inspection)(db, inspection)
+    elif status == "REJECT":
+        final = "REJECT" if random.random() < 0.85 else "ACCEPT"
+        (inspection_service.accept_inspection if final == "ACCEPT" else inspection_service.reject_inspection)(db, inspection)
+
+    inspection.created_at = backdate_to
+    if inspection.reviewed_at:
+        inspection.reviewed_at = backdate_to + datetime.timedelta(minutes=random.randint(1, 8))
+    db.commit()
+
+    if final == "REJECT" and not force_pass:
+        same_category = [p for p in products if p.category == item.product.category and p.id != item.product_id]
+        replacement = random.choice(same_category) if same_category else item.product
+        result = inspection_service.replace_item(
+            db, inspection, replacement.id, reason="Failed AI quality inspection — replaced during picking"
+        )
+        new_item = db.get(models.OrderItem, result["newOrderItem"]["id"])
+        new_inspection = db.get(models.Inspection, result["newInspectionId"])
+        simulate_item_inspection(db, order, new_item, products, backdate_to, force_pass=True, existing_inspection=new_inspection)
+
+
 STAGE_ORDER = ["RISK_ASSESSED", "PICKING", "PICKED", "PACKING", "PACKED", "DISPATCHED", "DELIVERED", "FEEDBACK_RECEIVED"]
 
 
-def advance_order(db, order, target_stage, pickers_for_wh, riders_for_wh):
+def advance_order(db, order, target_stage, pickers_for_wh, riders_for_wh, products):
     target_idx = STAGE_ORDER.index(target_stage)
     t = order.order_time
 
@@ -171,8 +238,16 @@ def advance_order(db, order, target_stage, pickers_for_wh, riders_for_wh):
             oi.picked = True
         order.status = "PICKED"
         order.picking_completed_at = t + datetime.timedelta(minutes=random.randint(6, 18))
+        db.commit()
+
+        # Phase 2 — risk-based AI visual inspection happens after picking,
+        # before packing, for items the risk engine flagged as inspectable.
+        for item in list(order.items):
+            if item.requires_inspection in ("required", "recommended") and not item.replaced:
+                simulate_item_inspection(db, order, item, products, order.picking_completed_at)
 
     if target_idx >= STAGE_ORDER.index("PACKING"):
+        db.refresh(order)
         services.get_or_create_packing_plan(db, order)
         order.status = "PACKING"
 
@@ -257,7 +332,7 @@ def create_historical_order(db, warehouses, products, pickers, riders, recent: b
     else:
         target = random.choices(["DELIVERED", "FEEDBACK_RECEIVED"], weights=[15, 85])[0]
 
-    advance_order(db, order, target, pickers_for_wh, riders_for_wh)
+    advance_order(db, order, target, pickers_for_wh, riders_for_wh, products)
     db.commit()
 
 

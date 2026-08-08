@@ -116,6 +116,7 @@ class Order(Base):
         "DeliveryInstruction", back_populates="order", uselist=False, cascade="all, delete-orphan"
     )
     feedback = relationship("Feedback", back_populates="order", uselist=False, cascade="all, delete-orphan")
+    inspections = relationship("Inspection", back_populates="order", cascade="all, delete-orphan")
 
 
 class OrderItem(Base):
@@ -129,8 +130,18 @@ class OrderItem(Base):
     damaged_reported = Column(Boolean, default=False)
     damage_note = Column(Text, nullable=True)
 
+    # Phase 2 — AI visual quality inspection
+    requires_inspection = Column(String, default="none")  # none | recommended | required
+    quality_check_status = Column(String, nullable=True)  # PENDING | PASSED | FAILED
+    replaced = Column(Boolean, default=False)  # true once superseded by a replacement item
+    replaced_by_item_id = Column(Integer, ForeignKey("order_items.id"), nullable=True)
+
     order = relationship("Order", back_populates="items")
     product = relationship("Product", back_populates="order_items")
+    inspections = relationship(
+        "Inspection", back_populates="order_item", cascade="all, delete-orphan",
+        foreign_keys="Inspection.order_item_id",
+    )
 
 
 class RiskPrediction(Base):
@@ -201,5 +212,103 @@ class Feedback(Base):
     issue_type = Column(String, default="none")
     comments = Column(Text, nullable=True)
     created_at = Column(DateTime, default=now)
+    flagged_as_possible_ai_miss = Column(Boolean, default=False)  # set when a PASSed item gets a damage complaint
 
     order = relationship("Order", back_populates="feedback")
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — AI Computer Vision Quality Inspection
+# ---------------------------------------------------------------------------
+
+
+class InspectionImage(Base):
+    __tablename__ = "inspection_images"
+
+    id = Column(Integer, primary_key=True)
+    inspection_id = Column(Integer, ForeignKey("inspections.id"), nullable=True)
+    file_path = Column(String, nullable=False)
+    content_type = Column(String, nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    image_quality_score = Column(Float, nullable=True)  # 0-100
+    image_quality_status = Column(String, nullable=True)  # good | poor
+    image_quality_issues = Column(Text, nullable=True)  # JSON list of strings
+    created_at = Column(DateTime, default=now)
+
+    inspection = relationship("Inspection", back_populates="image", foreign_keys=[inspection_id])
+
+
+class Inspection(Base):
+    __tablename__ = "inspections"
+
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    order_item_id = Column(Integer, ForeignKey("order_items.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+
+    attempt_number = Column(Integer, default=1)  # 1st scan, 2nd (replacement) scan, ...
+    quality_score = Column(Float, nullable=True)  # 0-100
+    inspection_status = Column(String, default="PENDING")  # PENDING | PASS | REVIEW | REJECT
+    ai_decision = Column(String, nullable=True)  # PASS | REVIEW | REJECT (raw AI output, never overwritten)
+    human_decision = Column(String, nullable=True)  # ACCEPT | REJECT
+    mandatory_human_review = Column(Boolean, default=False)  # CRITICAL-risk orders review even AI PASS
+    model_version = Column(String, nullable=True)
+    vision_mode = Column(String, default="simulation")  # simulation | (future real provider name)
+    inspection_time_ms = Column(Integer, nullable=True)
+    reviewed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=now)
+
+    order = relationship("Order", back_populates="inspections")
+    order_item = relationship("OrderItem", back_populates="inspections", foreign_keys=[order_item_id])
+    product = relationship("Product")
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_id])
+    # One-way FK (inspection_images.inspection_id -> inspections.id) — a
+    # standalone-uploaded image gets attached by updating its inspection_id.
+    image = relationship("InspectionImage", back_populates="inspection", uselist=False, foreign_keys=[InspectionImage.inspection_id])
+    defects = relationship("InspectionDefect", back_populates="inspection", cascade="all, delete-orphan")
+    model_prediction = relationship(
+        "ModelPrediction", back_populates="inspection", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class InspectionDefect(Base):
+    __tablename__ = "inspection_defects"
+
+    id = Column(Integer, primary_key=True)
+    inspection_id = Column(Integer, ForeignKey("inspections.id"), nullable=False)
+    defect_type = Column(String, nullable=False)
+    confidence = Column(Float, nullable=False)  # 0-1
+    severity = Column(String, nullable=False)  # low | medium | high
+    description = Column(String, nullable=True)
+
+    inspection = relationship("Inspection", back_populates="defects")
+
+
+class ReplacementEvent(Base):
+    __tablename__ = "replacement_events"
+
+    id = Column(Integer, primary_key=True)
+    order_item_id = Column(Integer, ForeignKey("order_items.id"), nullable=False)  # the new (replacement) item
+    original_product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    replacement_product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    reason = Column(String, nullable=False)
+    inspection_id = Column(Integer, ForeignKey("inspections.id"), nullable=False)  # the rejected inspection
+    created_at = Column(DateTime, default=now)
+
+
+class ModelPrediction(Base):
+    """Raw AI output, kept separate from the business Inspection record for
+    model-evaluation-dataset purposes (ground truth vs. prediction vs. human decision)."""
+
+    __tablename__ = "model_predictions"
+
+    id = Column(Integer, primary_key=True)
+    inspection_id = Column(Integer, ForeignKey("inspections.id"), unique=True, nullable=False)
+    model_version = Column(String, nullable=False)
+    prediction = Column(String, nullable=False)  # PASS | REVIEW | REJECT
+    confidence = Column(Float, nullable=True)  # overall/max defect confidence, 0-1
+    raw_result = Column(Text, nullable=False)  # JSON — full structured vision output
+    created_at = Column(DateTime, default=now)
+
+    inspection = relationship("Inspection", back_populates="model_prediction")

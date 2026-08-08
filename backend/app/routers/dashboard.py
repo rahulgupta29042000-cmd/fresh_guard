@@ -3,7 +3,7 @@ import datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
-from .. import models
+from .. import inspection_analytics, models
 from ..database import get_db
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -105,4 +105,5 @@ def get_dashboard(db: Session = Depends(get_db)):
         "top_damaged_categories": top_damaged_categories,
         "top_problematic_skus": top_problematic_skus,
         "warehouse_comparison": warehouse_comparison,
+        "ai_inspection": inspection_analytics.summary(db),
     }

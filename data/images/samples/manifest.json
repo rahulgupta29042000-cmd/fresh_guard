@@ -1,0 +1,50 @@
+[
+  {
+    "key": "tomato_good",
+    "label": "Tomato \u2014 no visible defect",
+    "product_hint": "tomato",
+    "file": "tomato_good.jpg"
+  },
+  {
+    "key": "tomato_bruised_review",
+    "label": "Tomato \u2014 possible bruising",
+    "product_hint": "tomato",
+    "file": "tomato_bruised_review.jpg"
+  },
+  {
+    "key": "tomato_severe_reject",
+    "label": "Tomato \u2014 severe visible damage",
+    "product_hint": "tomato",
+    "file": "tomato_severe_reject.jpg"
+  },
+  {
+    "key": "chips_good",
+    "label": "Chips packet \u2014 intact",
+    "product_hint": "chips",
+    "file": "chips_good.jpg"
+  },
+  {
+    "key": "chips_crushed_reject",
+    "label": "Chips packet \u2014 crushed",
+    "product_hint": "chips",
+    "file": "chips_crushed_reject.jpg"
+  },
+  {
+    "key": "glass_good",
+    "label": "Glass sauce bottle \u2014 intact",
+    "product_hint": "glass bottle",
+    "file": "glass_good.jpg"
+  },
+  {
+    "key": "glass_crack_review",
+    "label": "Glass sauce bottle \u2014 possible crack",
+    "product_hint": "glass bottle",
+    "file": "glass_crack_review.jpg"
+  },
+  {
+    "key": "dark_blurry",
+    "label": "Low quality \u2014 too dark / blurry",
+    "product_hint": "tomato",
+    "file": "dark_blurry.jpg"
+  }
+]

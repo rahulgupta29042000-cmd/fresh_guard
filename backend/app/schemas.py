@@ -40,6 +40,10 @@ class OrderItemOut(BaseModel):
     damaged_reported: bool
     damage_note: Optional[str] = None
     product_risk: Optional[float] = None
+    requires_inspection: str = "none"  # none | recommended | required
+    quality_check_status: Optional[str] = None  # PENDING | PASSED | FAILED
+    replaced: bool = False
+    replaced_by_item_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -149,3 +153,27 @@ class DashboardAnalytics(BaseModel):
     top_damaged_categories: List[dict]
     top_problematic_skus: List[dict]
     warehouse_comparison: List[dict]
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — AI Computer Vision Quality Inspection
+# ---------------------------------------------------------------------------
+
+
+class ImageUploadSampleRequest(BaseModel):
+    sample_key: str
+
+
+class InspectionCreate(BaseModel):
+    order_id: int
+    order_item_id: int
+    image_id: Optional[int] = None
+
+
+class InspectionHumanDecision(BaseModel):
+    note: Optional[str] = None
+
+
+class ReplaceRequest(BaseModel):
+    replacement_product_id: int
+    reason: Optional[str] = None

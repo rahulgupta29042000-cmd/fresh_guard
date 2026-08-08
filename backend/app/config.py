@@ -45,3 +45,70 @@ def risk_level_for_score(score: float) -> str:
         if low <= score <= high:
             return level
     return "CRITICAL"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — AI Computer Vision Quality Inspection
+# ---------------------------------------------------------------------------
+
+# "simulation" is the only mode implemented in Phase 2 (see backend/app/vision/).
+# The abstraction is designed so a real provider can be added later without
+# touching callers — see VisionService / VisionProvider.
+VISION_MODE = os.environ.get("VISION_MODE", "simulation")
+VISION_MODEL_VERSION = "vision-sim-v0.1"
+
+IMAGE_STORAGE_DIR = os.environ.get(
+    "IMAGE_STORAGE_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "images"),
+)
+IMAGE_MAX_SIZE_BYTES = 8 * 1024 * 1024  # 8 MB
+ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+# Quality Score (0-100) bands, purely descriptive (Excellent/Good/etc. labels).
+QUALITY_SCORE_BANDS = {
+    "EXCELLENT": (90, 100),
+    "GOOD": (75, 89),
+    "REVIEW": (60, 74),
+    "POOR": (0, 59),
+}
+
+# Decision-engine thresholds — separate from the vision model itself.
+VISION_DECISION_THRESHOLDS = {
+    "pass_min_score": 75,
+    "review_min_score": 60,
+    # below review_min_score -> REJECT on score alone, regardless of defects
+}
+
+# Image quality validation thresholds (computed from real pixel data — see vision/quality.py).
+IMAGE_QUALITY_THRESHOLDS = {
+    "min_brightness": 35,       # 0-255 mean luminance; below this = "too dark"
+    "max_brightness": 245,      # above this = blown out / product not visible
+    "min_sharpness": 25,        # Laplacian-variance edge-energy proxy; below this = "too blurry"
+    "min_width_px": 200,
+    "min_height_px": 200,
+}
+
+# Risk-based inspection eligibility. "required_fragility"/"recommended_fragility"
+# apply to the produce defect group (glass/packaged-goods groups use order-risk-only
+# rules below, since packaging-damage risk isn't captured by the fragility score).
+INSPECTION_RULES = {
+    "LOW": {"produce_required": None, "produce_recommended": None, "structural_required": False},
+    "MEDIUM": {"produce_required": None, "produce_recommended": 50, "structural_required": False},
+    "HIGH": {"produce_required": 40, "produce_recommended": 20, "structural_required": True},
+    "CRITICAL": {"produce_required": 0, "produce_recommended": 0, "structural_required": True},
+}
+
+# CRITICAL-risk orders route every inspected item to mandatory human review,
+# even when the AI decision is PASS (see services/inspection logic).
+MANDATORY_HUMAN_REVIEW_RISK_LEVELS = {"CRITICAL"}
+
+# Repeated-rejection escalation (section 18 of the brief).
+MAX_REPLACEMENT_ATTEMPTS_BEFORE_ESCALATION = 3
+
+
+def quality_band_for_score(score: float) -> str:
+    score = max(0, min(100, round(score)))
+    for band, (low, high) in QUALITY_SCORE_BANDS.items():
+        if low <= score <= high:
+            return band
+    return "POOR"
