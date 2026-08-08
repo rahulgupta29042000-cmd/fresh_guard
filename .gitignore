@@ -19,3 +19,12 @@ __pycache__/
 *.pyc
 venv/
 .venv/
+
+# Backend / DB
+backend/freshguard.db
+ml/holdout.csv
+
+# Frontend
+frontend/.next/
+frontend/out/
+
